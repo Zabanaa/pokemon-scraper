@@ -21,7 +21,7 @@ def create_connection():
         return db
 
 def clear_data(cursor):
-    cursor.execute("TRUNCATE TABLE pokemons;")
+    cursor.execute("DROP TABLE IF EXISTS pokemons;")
 
 def create_table(cursor):
     query  = """
