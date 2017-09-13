@@ -127,19 +127,16 @@ def get_all_pokemons():
         pokemon_bio = pokemon_bio.find("td").string
 
         pokemon_info["number"]  = pokemon_number
-        pokemon_info["name"]    = pokemon_name
-        pokemon_info["jp_name"] = pokemon_jp_name
-        pokemon_info["types"]   = pokemon_types
+        pokemon_info["name"]    = pokemon_name.lower()
+        pokemon_info["jp_name"] = pokemon_jp_name.lower()
+        pokemon_info["types"]   = ",".join(pokemon_types)
         pokemon_info["bio"]     = pokemon_bio
 
         yield pokemon_info
 
-
 def main():
 
-    # for pokemon in get_all_pokemons():
-    #     print("Done ")
-    #     print()
+    counter = 0
 
     print("Connecting to the database ...")
     db = create_connection()
@@ -162,12 +159,18 @@ def main():
             print("Saving pokemons ...")
             for pokemon in get_all_pokemons():
 
+
+                if counter == 5:
+                    break
+
                 try:
                     insert_to_db(cursor, pokemon)
+                    counter += 1
                 except psycopg2.ProgrammingError as e:
                     sys.exit("Error: {}".format(e))
 
                 print("{} saved !".format(pokemon["name"]))
+
 
             cursor.close()
 
