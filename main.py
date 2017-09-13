@@ -126,7 +126,7 @@ def get_all_pokemons():
         pokemon_bio = pokemon_details_page.find_all("h2")[5].next_sibling.next_sibling
         pokemon_bio = pokemon_bio.find("td").string
 
-        pokemon_info["number"]  = pokemon_number
+        pokemon_info["number"]  = "#{}".format(pokemon_number)
         pokemon_info["name"]    = pokemon_name.lower()
         pokemon_info["jp_name"] = pokemon_jp_name.lower()
         pokemon_info["types"]   = ",".join(pokemon_types)
