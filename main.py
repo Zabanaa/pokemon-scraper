@@ -159,7 +159,6 @@ def main():
 
                 try:
                     insert_to_db(cursor, pokemon)
-                    counter += 1
                 except psycopg2.ProgrammingError as e:
                     sys.exit("Error: {}".format(e))
 
