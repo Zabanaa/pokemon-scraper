@@ -136,8 +136,6 @@ def get_all_pokemons():
 
 def main():
 
-    counter = 0
-
     print("Connecting to the database ...")
     db = create_connection()
     print("Connected !")
@@ -158,10 +156,6 @@ def main():
 
             print("Saving pokemons ...")
             for pokemon in get_all_pokemons():
-
-
-                if counter == 5:
-                    break
 
                 try:
                     insert_to_db(cursor, pokemon)
