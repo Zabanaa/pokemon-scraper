@@ -8,22 +8,22 @@ POKEDEX_DOMAIN  = "https://pokemondb.net"
 DB_NAME         = os.getenv("POKEDEX_DB_NAME")
 DB_USER         = os.getenv("POKEDEX_DB_USER")
 DB_PASS         = os.getenv("POKEDEX_DB_PASSWORD")
-DB_HOST         = os.getenv("POKEDEX_DB_HOST")
-DB_PORT         = os.getenv("POKEDEX_DB_PORT")
+DB_HOST         = os.getenv("POKEDEX_DB_HOST", "localhost")
+DB_PORT         = os.getenv("POKEDEX_DB_PORT", 5432)
 
-def create_connection():
+def create_connection(db_name, db_user, db_pass):
     try:
-        db  = psycopg2.connect(dbname=DB_NAME, user=DB_USER, password=DB_PASS,
+        db  = psycopg2.connect(dbname=db_name, user=db_user, password=db_pass,
                                host=DB_HOST, port=DB_PORT)
     except Exception as e:
-        sys.exit("Error Connecting to the Database")
+        sys.exit("Could not connect to the database. Invalid credentials")
     else:
         return db
 
-def clear_data(cursor):
-    cursor.execute("DROP TABLE IF EXISTS pokemons;")
+def clear_data(db):
+    db.cursor.execute("DROP TABLE IF EXISTS pokemons;")
 
-def create_table(cursor):
+def create_table(db):
     query  = """
             CREATE TABLE IF NOT EXISTS pokemons (
                 id SERIAL PRIMARY KEY,
@@ -43,9 +43,9 @@ def create_table(cursor):
             );
             """
 
-    cursor.execute(query)
+    db.cursor.execute(query)
 
-def insert_to_db(cursor, pokemon):
+def insert_to_db(db, pokemon):
     query   = """
             INSERT INTO pokemons (
                 number,
@@ -63,7 +63,7 @@ def insert_to_db(cursor, pokemon):
             VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
 
-    cursor.execute(query,(
+    db.cursor.execute(query,(
                    pokemon["number"], pokemon["name"], pokemon["jp_name"],
                    pokemon["types"], pokemon["stats"]["hp"],
                    pokemon["stats"]["attack"], pokemon["stats"]["defense"],
@@ -71,10 +71,12 @@ def insert_to_db(cursor, pokemon):
                    pokemon["stats"]["speed"], pokemon["bio"]))
 
 
-
-def make_soup(url):
+def get_page(url):
     resp    = requests.get("{}{}".format(POKEDEX_DOMAIN, url))
-    return BeautifulSoup(resp.text, "html.parser")
+    return resp.text
+
+def make_soup(html):
+    return BeautifulSoup(html, "html.parser")
 
 def get_all_pokemons():
 
@@ -84,16 +86,17 @@ def get_all_pokemons():
 
     for pokemon in pokemons:
         pokemon_details_url  = pokemon.find(class_="ent-name").get("href")
-        pokemon_details_page = make_soup(pokemon_details_url)
+        pokemon_details_page = get_page(pokemon_details_url)
+        pokemon_details_soup = make_soup(pokemon_details_page)
 
         ## "Pokedex Data" Column from /pokedex/{pokemon_name}
-        top_panel = pokemon_details_page.find_all(class_="svtabs-panel-list")[0]
+        top_panel = pokemon_details_soup.find_all(class_="svtabs-panel-list")[0]
         top_panel = top_panel.find("li")
         top_panel = list(top_panel.children)
 
         pokedex_data = top_panel[1].find_all(class_="col")[1].find("table")
 
-        pokemon_name    = pokemon_details_page.find("h1").text
+        pokemon_name    = pokemon_details_soup.find("h1").text
         pokemon_number  = pokedex_data.find("strong").text
         pokemon_jp_name = pokedex_data.find_all("tr")[-1].find("td").string
 
@@ -123,7 +126,7 @@ def get_all_pokemons():
             value = stat.find(class_="num").string
             pokemon_info["stats"][title] = value
 
-        pokemon_bio = pokemon_details_page.find_all("h2")[5].next_sibling.next_sibling
+        pokemon_bio = pokemon_details_soup.find_all("h2")[5].next_sibling.next_sibling
         pokemon_bio = pokemon_bio.find("td").string
 
         pokemon_info["number"]  = "#{}".format(pokemon_number)
@@ -137,8 +140,10 @@ def get_all_pokemons():
 def main():
 
     print("Connecting to the database ...")
-    db = create_connection()
+    db = create_connection(DB_NAME, DB_USER, DB_PASS)
     print("Connected !")
+
+    print(type(db))
 
     with db:
 
