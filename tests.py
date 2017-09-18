@@ -24,6 +24,7 @@ class TestDB(unittest.TestCase):
         self.assertIn(self.db_user, db.dsn)
         self.assertIn(self.db_name, db.dsn)
 
+    def test_failed_connection(self):
         # Test failed connection
         with self.assertRaises(SystemExit) as context:
 
@@ -31,10 +32,6 @@ class TestDB(unittest.TestCase):
 
         error_msg = "Could not connect to the database. Invalid credentials"
         self.assertEqual(str(context.exception), error_msg)
-
-    def test_create_table(self):
-        pass
-
 
 if __name__ == "__main__":
     unittest.main()
