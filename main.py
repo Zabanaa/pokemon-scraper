@@ -20,8 +20,8 @@ def create_connection(db_name, db_user, db_pass):
     else:
         return db
 
-def clear_data(db):
-    db.cursor.execute("DROP TABLE IF EXISTS pokemons;")
+def clear_data(db, table_name):
+    db.cursor().execute("DROP TABLE IF EXISTS {};".format(table_name))
 
 def create_table(db, table_name):
     query  = """
@@ -62,14 +62,22 @@ def insert_to_db(db, pokemon):
             )
             VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-
-    db.cursor().execute(query,(
+    try:
+        db.cursor().execute(query,(
                    pokemon["number"], pokemon["name"], pokemon["jp_name"],
                    pokemon["types"], pokemon["stats"]["hp"],
                    pokemon["stats"]["attack"], pokemon["stats"]["defense"],
                    pokemon["stats"]["sp_atk"], pokemon["stats"]["sp_def"],
                    pokemon["stats"]["speed"], pokemon["bio"]))
+    except KeyError as e:
+        sys.exit("Error: Missing {} attribute in pokemon object".format(e))
 
+    except psycopg2.IntegrityError as e:
+        error = " ".join(e.pgerror.split())
+        if int(e.pgcode) == 23505:
+            sys.exit("Insertion Failed: Unique constraint violated. Message: {}".format(error))
+    except:
+        sys.exit(e)
 
 def get_page(url):
     resp    = requests.get("{}{}".format(POKEDEX_DOMAIN, url))
