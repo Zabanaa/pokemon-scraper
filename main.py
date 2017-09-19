@@ -23,9 +23,9 @@ def create_connection(db_name, db_user, db_pass):
 def clear_data(db):
     db.cursor.execute("DROP TABLE IF EXISTS pokemons;")
 
-def create_table(db):
+def create_table(db, table_name):
     query  = """
-            CREATE TABLE IF NOT EXISTS pokemons (
+            CREATE TABLE IF NOT EXISTS {} (
                 id SERIAL PRIMARY KEY,
                 number CHAR(10) NOT NULL,
                 name CHAR(255) NOT NULL,
@@ -41,9 +41,9 @@ def create_table(db):
                 generation INT,
                 CONSTRAINT unique_name UNIQUE (name)
             );
-            """
+            """.format(table_name)
 
-    db.cursor.execute(query)
+    db.cursor().execute(query)
 
 def insert_to_db(db, pokemon):
     query   = """
@@ -63,7 +63,7 @@ def insert_to_db(db, pokemon):
             VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
 
-    db.cursor.execute(query,(
+    db.cursor().execute(query,(
                    pokemon["number"], pokemon["name"], pokemon["jp_name"],
                    pokemon["types"], pokemon["stats"]["hp"],
                    pokemon["stats"]["attack"], pokemon["stats"]["defense"],
