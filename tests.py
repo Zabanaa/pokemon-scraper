@@ -1,27 +1,25 @@
-from main import create_connection, create_table
+from main import create_connection, create_table, clear_data, get_page, insert_to_db
 from psycopg2.extensions import connection as pg
+from unittest.mock import patch
 
-import unittest, os, psycopg2
+import unittest, os, psycopg2, requests
 
-class TestDB(unittest.TestCase):
+DB_USER = os.getenv("POKEDEX_SCRAPER_DB_USER")
+DB_NAME = os.getenv("POKEDEX_SCRAPER_DB_NAME")
+DB_PASS = os.getenv("POKEDEX_SCRAPER_DB_PASS")
+
+class TestDBConnection(unittest.TestCase):
 
     """
-    Test class for the DB instance
+    Test suite for a basic db connection.
     """
-    def setUp(self):
-        self.db_user = os.getenv("POKEDEX_SCRAPER_DB_USER")
-        self.db_pass = os.getenv("POKEDEX_SCRAPER_DB_PASS")
-        self.db_name = os.getenv("POKEDEX_SCRAPER_DB_NAME")
-
-    def tearDown(self):
-        pass
 
     def test_create_connection(self):
 
-        db = create_connection(self.db_name, self.db_user, self.db_pass)
+        db = create_connection(DB_NAME, DB_USER, DB_PASS)
         self.assertIsInstance(db, pg)
-        self.assertIn(self.db_user, db.dsn)
-        self.assertIn(self.db_name, db.dsn)
+        self.assertIn(DB_USER, db.dsn)
+        self.assertIn(DB_NAME, db.dsn)
 
     def test_failed_connection(self):
         # Test failed connection
@@ -32,24 +30,46 @@ class TestDB(unittest.TestCase):
         error_msg = "Could not connect to the database. Invalid credentials"
         self.assertEqual(str(context.exception), error_msg)
 
+
+class TestDBOperations(unittest.TestCase):
+
+    """
+    Test suite for database operations.
+    """
+
+    def setUp(self):
+
+        self.db = create_connection(DB_NAME, DB_USER, DB_PASS)
+
+        self.pikachu = {
+            "number": "#025",
+            "name": "pikachu",
+            "jp_name": "pikachu",
+            "types": "electric",
+            "stats":{
+                "hp": 34,
+                "attack": 34,
+                "defense": 34,
+                "sp_atk": 34,
+                "sp_def": 34,
+                "speed": 34,
+            },
+            "bio": "cute",
+            "generation": 1,
+        }
+
+        create_table(self.db, "pokemons")
+
     def test_failed_create_table(self):
-        db = create_connection(self.db_name, self.db_user, self.db_pass)
-        self.assertIsInstance(db, pg)
 
-        with db:
+        with self.assertRaises(psycopg2.ProgrammingError) as context:
+            self.db.cursor().execute("SELECT * FROM pokemon;")
 
-            table = create_table(db, "pokemons")
-
-            with db.cursor() as cursor:
-
-                with self.assertRaises(psycopg2.ProgrammingError) as context:
-                    cursor.execute("SELECT * FROM pokemon;")
-
-                # 42P01 is the error code for "table [] does not exist"
-                self.assertEqual("42P01", context.exception.pgcode)
+        # 42P01 is the error code for "table [] does not exist"
+        error_msg = 'relation "pokemon" does not exist'
+        self.assertIn(error_msg, str(context.exception))
 
     def test_create_table(self):
-        db = create_connection(self.db_name, self.db_user, self.db_pass)
 
         query = """
             SELECT table_name
@@ -58,14 +78,74 @@ class TestDB(unittest.TestCase):
             AND table_type='BASE TABLE';
         """
 
-        with db:
-            table = create_table(db, "pokemons")
+        with self.db.cursor() as cursor:
+            cursor.execute(query)
+            table_name = cursor.fetchone()
 
-            with db.cursor() as cursor:
-                cursor.execute(query)
-                table_name = cursor.fetchone()
+        self.assertEqual("pokemons", table_name[0])
 
-            self.assertEqual("pokemons", table_name[0])
+    def test_drop_table(self):
+
+        query = """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema='public'
+            AND table_type='BASE TABLE';
+        """
+
+        clear_data(self.db, "pokemons")
+
+        with self.db.cursor() as cursor:
+            cursor.execute(query)
+            result = cursor.fetchone()
+
+        self.assertIsNone(result)
+
+    def test_insert_to_db(self):
+
+        query = """
+        SELECT COUNT(id) FROM pokemons;
+        """
+
+        insert_to_db(self.db, self.pikachu)
+
+        with self.db.cursor() as cursor:
+            cursor.execute(query)
+            row_count = cursor.fetchone()
+
+        self.assertEqual(row_count[0], 1)
+
+    def test_failed_insert_missing_key(self):
+
+        query = """
+        SELECT COUNT(id) FROM pokemons;
+        """
+
+        del self.pikachu["name"]
+
+        with self.db:
+
+            with self.assertRaises(SystemExit) as context:
+                insert_to_db(self.db, self.pikachu)
+
+        error_msg = "Error: Missing 'name' attribute in pokemon object"
+        self.assertEqual(str(context.exception), error_msg)
+
+    def test_failed_insert_unique_constraint_violation(self):
+
+        query = """
+        SELECT COUNT(id) FROM pokemons;
+        """
+
+        with self.db:
+
+            insert_to_db(self.db, self.pikachu)
+
+            with self.assertRaises(SystemExit) as context:
+                insert_to_db(self.db, self.pikachu)
+
+            error_message = "Unique constraint violated"
+            self.assertIn(error_message, str(context.exception))
 
 if __name__ == "__main__":
     unittest.main()
