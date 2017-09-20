@@ -1,106 +1,16 @@
-import os, sys
-import requests
-import psycopg2
+from db import PokemonDB
+import os
 from exceptions import RequestError
-from bs4 import BeautifulSoup
+from helpers import make_soup, get_page
 
-POKEDEX_DOMAIN  = "https://pokemondb.net"
-
-DB_NAME         = os.getenv("POKEDEX_DB_NAME")
-DB_USER         = os.getenv("POKEDEX_DB_USER")
-DB_PASS         = os.getenv("POKEDEX_DB_PASSWORD")
-DB_HOST         = os.getenv("POKEDEX_DB_HOST", "localhost")
-DB_PORT         = os.getenv("POKEDEX_DB_PORT", 5432)
-
-def create_connection(db_name, db_user, db_pass):
-    try:
-        db  = psycopg2.connect(dbname=db_name, user=db_user, password=db_pass,
-                               host=DB_HOST, port=DB_PORT)
-    except Exception as e:
-        sys.exit("Could not connect to the database. Invalid credentials")
-    else:
-        return db
-
-def clear_data(db, table_name):
-    db.cursor().execute("DROP TABLE IF EXISTS {};".format(table_name))
-
-def create_table(db, table_name):
-    query  = """
-            CREATE TABLE IF NOT EXISTS {} (
-                id SERIAL PRIMARY KEY,
-                number CHAR(10) NOT NULL,
-                name CHAR(255) NOT NULL,
-                jp_name CHAR(255) NOT NULL,
-                types CHAR(255) NOT NULL,
-                hp INT NOT NULL,
-                attack INT NOT NULL,
-                defense INT NOT NULL,
-                sp_atk INT NOT NULL,
-                sp_def INT NOT NULL,
-                speed INT NOT NULL,
-                bio TEXT NOT NULL,
-                generation INT,
-                CONSTRAINT unique_name UNIQUE (name)
-            );
-            """.format(table_name)
-
-    db.cursor().execute(query)
-
-def insert_to_db(db, pokemon):
-    query   = """
-            INSERT INTO pokemons (
-                number,
-                name,
-                jp_name,
-                types,
-                hp,
-                attack,
-                defense,
-                sp_atk,
-                sp_def,
-                speed,
-                bio
-            )
-            VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-    try:
-        db.cursor().execute(query,(
-                   pokemon["number"], pokemon["name"], pokemon["jp_name"],
-                   pokemon["types"], pokemon["stats"]["hp"],
-                   pokemon["stats"]["attack"], pokemon["stats"]["defense"],
-                   pokemon["stats"]["sp_atk"], pokemon["stats"]["sp_def"],
-                   pokemon["stats"]["speed"], pokemon["bio"]))
-    except KeyError as e:
-        sys.exit("Error: Missing {} attribute in pokemon object".format(e))
-
-    except psycopg2.IntegrityError as e:
-        error = " ".join(e.pgerror.split())
-        if int(e.pgcode) == 23505:
-            sys.exit("Insertion Failed: Unique constraint violated. Message: {}".format(error))
-    except:
-        sys.exit(e)
-
-def get_page(url):
-
-    resp    = requests.get("{}{}".format(POKEDEX_DOMAIN, url))
-    status_code = resp.status_code
-
-    if status_code != 200:
-
-        if status_code >= 500 and status_code <= 599 :
-            raise RequestError(status_code, "Server Error.")
-
-        if status_code == 404:
-            raise RequestError(status_code, "Page not found.")
-
-    return resp.text
-
-def make_soup(html):
-    return BeautifulSoup(html, "html.parser")
+DB_NAME  = os.getenv("POKEDEX_DB_NAME")
+DB_USER  = os.getenv("POKEDEX_DB_USER")
+DB_PASS  = os.getenv("POKEDEX_DB_PASSWORD")
 
 def get_all_pokemons():
 
-    pokedex         = make_soup("/pokedex/national")
+    pokedex_page    = get_page("/pokedex/national")
+    pokedex         = make_soup(pokedex_page)
     pokemons        = pokedex.find_all("span", class_="infocard-tall")
     pokemon_info    = {"stats": {}}
 
@@ -121,24 +31,22 @@ def get_all_pokemons():
         pokemon_jp_name = pokedex_data.find_all("tr")[-1].find("td").string
 
         if pokemon_jp_name == None:
-            pokemon_jp_name = pokemon_name
+           pokemon_jp_name = pokemon_name
 
-        ## Extract pokemon types
+        # Extract pokemon types
         pokemon_types   = pokedex_data.find_all(class_="type-icon")
         pokemon_types   = [p_type.text.lower() for p_type in pokemon_types]
 
-        ## "Base Stats" Column on the bottom right
-
+        # "Base Stats" Column on the bottom right
         base_stats  = top_panel[3]
         base_stats  = base_stats.find(class_="col").find("table").find("tbody")
         base_stats  = base_stats.find_all("tr")
 
-
         for stat in base_stats:
 
             if any([
-                    stat.find("th") is None,
-                    stat.find(class_="num") is None
+                stat.find("th") is None,
+                stat.find(class_="num") is None
             ]):
                 continue
 
@@ -159,40 +67,24 @@ def get_all_pokemons():
 
 def main():
 
+    db = PokemonDB(DB_NAME, DB_USER, DB_PASS)
+
     print("Connecting to the database ...")
-    db = create_connection(DB_NAME, DB_USER, DB_PASS)
+    db.connect()
     print("Connected !")
 
-    print(type(db))
+    print("Clearing Existing Data ...")
+    db.delete_all_pokemons()
+    print("Data Cleared !")
 
-    with db:
+    print("Creating table ...")
+    db.create_pokemons_table()
+    print("Table successfully created !")
 
-        with db.cursor() as cursor:
-
-            print("Clearing Existing Data ...")
-            clear_data(cursor)
-            print("Data Cleared !")
-
-            print("Creating table ...")
-            create_table(cursor)
-            print("Table successfully created !")
-
-            db.commit()
-
-            print("Saving pokemons ...")
-            for pokemon in get_all_pokemons():
-
-                try:
-                    insert_to_db(cursor, pokemon)
-                except psycopg2.ProgrammingError as e:
-                    sys.exit("Error: {}".format(e))
-
-                print("{} saved !".format(pokemon["name"]))
-
-
-            cursor.close()
-
-        db.commit()
+    print("Saving pokemons ...")
+    for pokemon in get_all_pokemons():
+        db.insert_pokemon(pokemon)
+        print("{} saved !".format(pokemon["name"]))
 
     print("All Done !!")
 
