@@ -1,4 +1,5 @@
 import requests
+from pokemon_scraper.exceptions import RequestError
 from bs4 import BeautifulSoup
 
 POKEDEX_DOMAIN  = "https://pokemondb.net"
