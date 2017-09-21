@@ -43,8 +43,7 @@ class PokemonDB(object):
         );
         """
 
-        with self.conn.cursor() as cursor:
-            cursor.execute(query)
+        self.conn.cursor().execute(query)
 
         self.conn.commit()
 
@@ -56,31 +55,28 @@ class PokemonDB(object):
         VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
-        with self.conn.cursor() as cursor:
+        try:
+            self.conn.cursor().execute(query,(
+                       pokemon["number"], pokemon["name"], pokemon["jp_name"],
+                       pokemon["types"], pokemon["stats"]["hp"],
+                       pokemon["stats"]["attack"], pokemon["stats"]["defense"],
+                       pokemon["stats"]["sp_atk"], pokemon["stats"]["sp_def"],
+                       pokemon["stats"]["speed"], pokemon["bio"]))
 
-            try:
-                cursor.execute(query,(
-                           pokemon["number"], pokemon["name"], pokemon["jp_name"],
-                           pokemon["types"], pokemon["stats"]["hp"],
-                           pokemon["stats"]["attack"], pokemon["stats"]["defense"],
-                           pokemon["stats"]["sp_atk"], pokemon["stats"]["sp_def"],
-                           pokemon["stats"]["speed"], pokemon["bio"]))
+        except KeyError as e:
+            sys.exit("Error: Missing {} attribute in pokemon object".format(e))
 
-            except KeyError as e:
-                sys.exit("Error: Missing {} attribute in pokemon object".format(e))
+        except psycopg2.IntegrityError as e:
+            error = " ".join(e.pgerror.split())
 
-            except psycopg2.IntegrityError as e:
-                error = " ".join(e.pgerror.split())
-
-                if int(e.pgcode) == 23505:
-                    sys.exit("Insertion Failed: Unique constraint violated. Message: {}".format(error))
-            except Exception as e:
-                sys.exit(ekkk)
+            if int(e.pgcode) == 23505:
+                sys.exit("Insertion Failed: Unique constraint violated. Message: {}".format(error))
+        except Exception as e:
+            sys.exit(ekkk)
 
         self.conn.commit()
 
     def delete_all_pokemons(self):
 
-        with self.conn.cursor() as cursor:
-            cursor.execute("DROP TABLE IF EXISTS pokemons;")
+        self.conn.cursor().execute("DROP TABLE IF EXISTS pokemons;")
 
