@@ -1,7 +1,7 @@
-from db import PokemonDB
 import os
-from exceptions import RequestError
-from helpers import make_soup, get_page
+
+from pokemon_scraper.db import PokemonDB
+from pokemon_scraper.helpers import make_soup, get_page
 
 DB_NAME  = os.getenv("POKEDEX_DB_NAME")
 DB_USER  = os.getenv("POKEDEX_DB_USER")
