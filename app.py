@@ -86,6 +86,7 @@ def main():
         db.insert_pokemon(pokemon)
         print("{} saved !".format(pokemon["name"]))
 
+    db.close_connection()
     print("All Done !!")
 
 if __name__ == "__main__":
