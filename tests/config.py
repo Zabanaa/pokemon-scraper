@@ -1,0 +1,7 @@
+import os
+
+DB_USER = os.getenv("POKEDEX_SCRAPER_DB_USER")
+DB_NAME = os.getenv("POKEDEX_SCRAPER_DB_NAME")
+DB_PASS = os.getenv("POKEDEX_SCRAPER_DB_PASS")
+
+
